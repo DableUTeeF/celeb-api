@@ -1,0 +1,40 @@
+services:
+  search-mq:
+    container_name: facerecog_search-mq
+    image: rabbitmq:3-management
+    hostname: search-mq
+    restart: unless-stopped
+    networks:
+      - facerecog_net
+    environment:
+      TZ: Asia/Bangkok
+
+  frontend:
+    build: frontend_api/
+    working_dir: /app
+    command: python3 server_fastapi.py
+    ports:
+      - 8502:8000
+    networks:
+      - facerecog_net
+    depends_on:
+      - search-mq
+
+  search-worker:
+    build: backend_search/
+    command: python3 worker.py
+    working_dir: /code
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '0' ]
+              capabilities: [ gpu ]
+    networks:
+      - facerecog_net
+    depends_on:
+      - search-mq
+
+networks:
+  facerecog_net:
