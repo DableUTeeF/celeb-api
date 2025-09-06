@@ -5,6 +5,7 @@ RUN pip install uvicorn
 RUN pip install python-multipart
 RUN pip install pika
 RUN pip install pillow
+RUN pip install opencv-python-headless
 COPY . .
 RUN mkdir static
 CMD 'python server_fastapi.py'

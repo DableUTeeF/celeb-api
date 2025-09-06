@@ -1,6 +1,5 @@
 services:
   search-mq:
-    container_name: facerecog_search-mq
     image: rabbitmq:3-management
     hostname: search-mq
     restart: unless-stopped
@@ -19,11 +18,19 @@ services:
       - facerecog_net
     depends_on:
       - search-mq
+    volumes:
+      - ./frontend_api:/app
+      - ./tmp:/tmp
+      - ./static:/mnt/static
 
   search-worker:
     build: backend_search/
-    command: python3 worker.py
+    command: python3.10 worker.py
     working_dir: /code
+    volumes:
+      - ./backend_search:/code
+      - ./tmp:/tmp
+      - ./static:/mnt/static
     deploy:
       resources:
         reservations:

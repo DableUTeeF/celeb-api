@@ -8,7 +8,10 @@ import os
 import uuid
 from PIL import Image
 import json
-
+import base64
+import cv2
+import numpy as np
+from tempfile import NamedTemporaryFile
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="/mnt/static"), name="static")
@@ -49,22 +52,55 @@ class RPCClient(object):
             self.connection.process_data_events()
         return self.response
 
+    def callasync(self, body, routing_key):
+        self.response = None
+        self.corr_id = str(uuid.uuid4())
+        self.channel.basic_publish(
+            exchange='',
+            routing_key=routing_key,
+            properties=pika.BasicProperties(
+                reply_to=self.callback_queue,
+                correlation_id=self.corr_id,
+            ),
+            body=body
+        )
 
-def process_img(cvimg1, cvimg2, org_filename=''):
+
+@app.post('/images')
+def images_similarity(image1: UploadFile, image2: UploadFile, request: Request):
     client = RPCClient()
-    result = client.call(cvimg, 'image_queue')
-    return result
+    img1_np = np.frombuffer(image1.file.read(), np.uint8)
+    img2_np = np.frombuffer(image2.file.read(), np.uint8)
+    img1 = cv2.imdecode(img1_np, cv2.IMREAD_COLOR)
+    img2 = cv2.imdecode(img2_np, cv2.IMREAD_COLOR)
+    _, buffer1 = cv2.imencode('.jpg', img1)
+    _, buffer2 = cv2.imencode('.jpg', img2)
+    results = client.call(
+        json.dumps({'data': {'image1': base64.b64encode(buffer1).decode(), 'image2': base64.b64encode(buffer2).decode()}, 'type': 'images_sim'}),
+        'image_queue'
+    )
+
+    if isinstance(results, bytes):
+        results = json.loads(results.decode())
+
+        return JSONResponse(content=results)
+    elif 'Image is too big.' in results['error']:
+        return JSONResponse(content={'error': results['error']}, status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+    else:
+        return JSONResponse(content={'error': results['error']}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-def process_video(cvimg, org_filename=''):
+@app.post('/image-feature')
+def image_feature(image: UploadFile, request: Request):
     client = RPCClient()
-    result = client.call(cvimg, 'video_queue')
-    return result
-
-
-@app.post('/image')
-def _file_upload(image1: UploadFile, image2: UploadFile, request: Request):
-    results = process_img(image1.file.read(), image2.file.read())
+    img1_np = np.frombuffer(image.file.read(), np.uint8)
+    img1 = cv2.imdecode(img1_np, cv2.IMREAD_COLOR)
+    _, buffer1 = cv2.imencode('.jpg', img1)
+    results = client.call(
+        json.dumps({'data': {'image': base64.b64encode(buffer1).decode()}, 'type': 'images_features'}),
+        'image_queue'
+    )
+    client.connection.close()
     if isinstance(results, bytes):
         results = json.loads(results.decode())
 
@@ -76,16 +112,22 @@ def _file_upload(image1: UploadFile, image2: UploadFile, request: Request):
 
 
 @app.post('/video')
-def _file_upload(file: UploadFile, request: Request):
-    results = process_img(file.file.read())
-    if isinstance(results, bytes):
-        results = json.loads(results.decode())
+def video_search(image: UploadFile, video: UploadFile, skip_interval: int, request: Request):
+    client = RPCClient()
+    contents = video.file.read()
+    temp = NamedTemporaryFile(delete=False)
+    with temp as f:
+        f.write(contents)
+    img1_np = np.frombuffer(image.file.read(), np.uint8)
+    img1 = cv2.imdecode(img1_np, cv2.IMREAD_COLOR)
+    _, buffer1 = cv2.imencode('.jpg', img1)
+    client.callasync(
+        json.dumps({'data': {'image': base64.b64encode(buffer1).decode(), 'video': temp.name, 'skip_interval': skip_interval}, 'type': 'video'}),
+        'image_queue'
+    )
+    # client.connection.close()
 
-        return JSONResponse(content=results)
-    elif 'Image is too big.' in results['error']:
-        return JSONResponse(content={'error': results['error']}, status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
-    else:
-        return JSONResponse(content={'error': results['error']}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return JSONResponse(content={'file_id': temp.name[5:]+'.json'})
 
 
 if __name__ == "__main__":
