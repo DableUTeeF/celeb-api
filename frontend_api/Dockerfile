@@ -6,6 +6,8 @@ RUN pip install python-multipart
 RUN pip install pika
 RUN pip install pillow
 RUN pip install opencv-python-headless
+RUN pip install psycopg2
+RUN pip install SQLAlchemy
 COPY . .
 RUN mkdir static
 CMD 'python server_fastapi.py'

@@ -13,6 +13,8 @@ RUN pip3.10 install onnxruntime-gpu
 RUN pip3.10 install insightface==0.7.3
 RUN pip3.10 install pika
 RUN pip3.10 install "numpy<2"
+RUN pip install psycopg2
+RUN pip install SQLAlchemy
 WORKDIR /code
 COPY . .
 # ENV LD_LIBRARY_PATH /usr/local/cuda/lib64

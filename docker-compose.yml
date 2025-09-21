@@ -8,6 +8,18 @@ services:
     environment:
       TZ: Asia/Bangkok
 
+  db:
+    image: postgres:14
+    volumes:
+      - ./db/data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_HOST=db
+    networks:
+      - facerecog_net
+
   frontend:
     build: frontend_api/
     working_dir: /app
@@ -22,6 +34,11 @@ services:
       - ./frontend_api:/app
       - ./tmp:/tmp
       - ./static:/mnt/static
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_HOST=db
 
   search-worker:
     build: backend_search/
@@ -42,6 +59,11 @@ services:
       - facerecog_net
     depends_on:
       - search-mq
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_HOST=db
 
 networks:
   facerecog_net:
